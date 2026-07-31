@@ -27,7 +27,7 @@ bno085:
   miso_gpio: 9
   cs_gpio: 8
   reset_gpio: 5
-  int_gpio: 27
+  int_gpio: 17
   refresh_hz: 10
 
 bmp388:
