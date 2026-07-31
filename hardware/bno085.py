@@ -53,9 +53,17 @@ class BNO085Sensor:
 
         try:
             spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+            print("Creating CS...")
             chip_select = digitalio.DigitalInOut(getattr(board, f"D{self.config.cs_gpio}"))
+            print("CS OK")
+
+            print("Creating INT...")
             interrupt = digitalio.DigitalInOut(getattr(board, f"D{self.config.int_gpio}"))
+            print("INT OK")
+
+            print("Creating RESET...")
             reset = digitalio.DigitalInOut(getattr(board, f"D{self.config.reset_gpio}"))
+            print("RESET OK")
             sensor = BNO08X_SPI(spi, chip_select, interrupt, reset)
             sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
             sensor.enable_feature(BNO_REPORT_GYROSCOPE)
