@@ -51,24 +51,21 @@ class BNO085Sensor:
                 "adafruit-circuitpython-bno08x."
             ) from exc
 
+        import contextlib
+        import io
+
         try:
             spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-            print("Creating CS...")
             chip_select = digitalio.DigitalInOut(getattr(board, f"D{self.config.cs_gpio}"))
-            print("CS OK")
-
-            print("Creating INT...")
-            interrupt = digitalio.DigitalInOut(getattr(board, f"D{self.config.int_gpio}"))
-            print("INT OK")
-
-            print("Creating RESET...")
-            reset = digitalio.DigitalInOut(getattr(board, f"D{self.config.reset_gpio}"))
-            print("RESET OK")
-            sensor = BNO08X_SPI(spi, chip_select, interrupt, reset)
-            sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
-            sensor.enable_feature(BNO_REPORT_GYROSCOPE)
-            sensor.enable_feature(BNO_REPORT_MAGNETOMETER)
-            sensor.enable_feature(BNO_REPORT_ROTATION_VECTOR)
+            interrupt   = digitalio.DigitalInOut(getattr(board, f"D{self.config.int_gpio}"))
+            reset       = digitalio.DigitalInOut(getattr(board, f"D{self.config.reset_gpio}"))
+            # Suppress the BNO08X library's own debug prints (Hard resetting, raw packets)
+            with contextlib.redirect_stdout(io.StringIO()):
+                sensor = BNO08X_SPI(spi, chip_select, interrupt, reset)
+                sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
+                sensor.enable_feature(BNO_REPORT_GYROSCOPE)
+                sensor.enable_feature(BNO_REPORT_MAGNETOMETER)
+                sensor.enable_feature(BNO_REPORT_ROTATION_VECTOR)
             self._sensor = sensor
         except Exception as exc:
             raise HardwareError(

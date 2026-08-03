@@ -152,6 +152,17 @@ def _render(
     return "\n".join(lines)
 
 
+def _connecting_screen(msg: str) -> None:
+    print(_CLEAR, end="")
+    print(f"{_BOLD}{_CYAN}╔{'═' * (_W - 2)}╗{_RESET}")
+    print(f"{_BOLD}{_CYAN}║{'  Raspberry Pi — Live Sensor Monitor':^{_W - 2}}║{_RESET}")
+    print(f"{_BOLD}{_CYAN}╚{'═' * (_W - 2)}╝{_RESET}")
+    print()
+    print(f"  {_YELLOW}⟳  {msg}{_RESET}")
+    print(f"  {_DIM}This may take a few seconds…{_RESET}")
+    print(flush=True)
+
+
 def run(logger: ToolkitLogger, config: AppConfig) -> bool:
     """Stream live readings from both BNO085 and BMP388."""
     imu_sensor = BNO085Sensor(config.bno085)
@@ -162,21 +173,38 @@ def run(logger: ToolkitLogger, config: AppConfig) -> bool:
     last_sys   = 0.0
 
     print(_HIDE, end="", flush=True)
+
+    # ── Connect sensors once upfront with a visible status ──────────────────
+    _connecting_screen("Connecting to BNO085 (IMU)…")
+    imu_err = ""
+    try:
+        imu_sensor.connect()
+    except HardwareError as exc:
+        imu_err = str(exc)
+
+    _connecting_screen("Connecting to BMP388 (Pressure)…")
+    bmp_err = ""
+    try:
+        bmp_sensor.connect()
+    except HardwareError as exc:
+        bmp_err = str(exc)
+
     logger.info("Live monitor running. Press Ctrl+C to stop.")
 
     try:
         while True:
             imu_reading: BNO085Reading | None = None
             bmp_reading: BMP388Reading | None = None
-            imu_err = bmp_err = ""
 
             try:
                 imu_reading = imu_sensor.read()
+                imu_err = ""
             except HardwareError as exc:
                 imu_err = str(exc)
 
             try:
                 bmp_reading = bmp_sensor.read()
+                bmp_err = ""
             except HardwareError as exc:
                 bmp_err = str(exc)
 
