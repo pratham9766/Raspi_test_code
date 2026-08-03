@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from config import AppConfig
-from tests import test_all, test_bmp388, test_bno085, test_camera, test_servo
+from tests import test_all, test_bmp388, test_bno085, test_camera, test_live, test_servo
 from utils.colors import Color
 from utils.helpers import get_system_info, list_spi_devices
 from utils.logger import ToolkitLogger
@@ -25,6 +25,7 @@ def _print_menu() -> None:
     print("5 Check SPI Devices")
     print("6 Test Everything")
     print("7 Show System Info")
+    print("8 Live Sensor Monitor  (BNO085 + BMP388)")
     print("0 Exit")
 
 
@@ -76,6 +77,8 @@ def run_menu(config: AppConfig, logger: ToolkitLogger) -> None:
             test_all.run(logger, config)
         elif choice == "7":
             show_system_info()
+        elif choice == "8":
+            test_live.run(logger, config)
         elif choice == "0":
             logger.info("Exiting Raspberry Pi Test Utility")
             break
