@@ -27,7 +27,7 @@ bno085:
   miso_gpio: 9
   cs_gpio: 5
   reset_gpio: 6
-  int_gpio: 17
+  int_gpio: 27
   refresh_hz: 10
 
 bmp388:
@@ -37,7 +37,7 @@ bmp388:
   mosi_gpio: 10
   miso_gpio: 9
   cs_gpio: 22
-  int_gpio: 27
+  int_gpio: 17
   sea_level_pressure_hpa: 1013.25
   refresh_hz: 5
 
