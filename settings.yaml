@@ -25,7 +25,7 @@ bno085:
   sck_gpio: 11
   mosi_gpio: 10
   miso_gpio: 9
-  cs_gpio: 5
+  cs_gpio: 8
   reset_gpio: 6
   int_gpio: 27
   refresh_hz: 10
