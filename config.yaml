@@ -7,28 +7,30 @@ board:
   spi_bus: 0
   spi_device: 0
 
+# ── BNO085 IMU (I2C) ──────────────────────────────────────────────────────────
 bno085:
   interface: i2c
-  address: 0x4A        # 0x4A default; 0x4B if PS1 pulled high
+  address: 0x4A          # 0x4A default; 0x4B if PS1 pulled high
   sda_gpio: 2
   scl_gpio: 3
   refresh_hz: 10
 
+# ── BMP388 Pressure Sensor (I2C) ─────────────────────────────────────────────
 bmp388:
-  interface: spi
-  sck_gpio: 11
-  mosi_gpio: 10
-  miso_gpio: 9
-  cs_gpio: 22
-  int_gpio: 17
+  interface: i2c
+  address: 0x76          # 0x76 default; 0x77 if SDO pulled high
+  sda_gpio: 2
+  scl_gpio: 3
   sea_level_pressure_hpa: 1013.25
   refresh_hz: 5
 
+# ── PCA9685 PWM Driver (I2C) ─────────────────────────────────────────────────
 pca9685:
   interface: i2c
   address: 0x40
   frequency_hz: 50
 
+# ── Standalone Servo (channel 0, for test_servo menu) ────────────────────────
 servo:
   pca9685_channel: 0
   min_pulse_us: 500
@@ -37,6 +39,7 @@ servo:
   max_angle: 180
   settle_seconds: 0.3
 
+# ── Stepper Motor (28BYJ-48 via ULN2003) ─────────────────────────────────────
 stepper:
   in1_gpio: 18
   in2_gpio: 23
@@ -45,14 +48,24 @@ stepper:
   step_delay_ms: 2
   steps_per_revolution: 4096
 
+# ── Gimbal (dual servo via PCA9685) ──────────────────────────────────────────
+# X axis (yaw)   → PCA9685 channel 0
+# Y axis (pitch) → PCA9685 channel 1
+# BNO085 Roll  → X servo
+# BNO085 Pitch → Y servo
 gimbal:
-  x_steps_per_degree: 11.37    # 4096 / 360
-  y_min_angle: 0
-  y_max_angle: 180
-  y_center_angle: 90
+  x_channel: 0
+  y_channel: 1
+  min_angle: 0
+  max_angle: 180
+  center_angle: 90
   sweep_step_deg: 5
   sweep_delay_s: 0.05
+  min_pulse_us: 500
+  max_pulse_us: 2500
+  settle_seconds: 0.05
 
+# ── Camera ────────────────────────────────────────────────────────────────────
 camera:
   resolution: [1920, 1080]
   preview_seconds: 5
@@ -61,6 +74,7 @@ camera:
   video_seconds: 10
   timelapse_interval_seconds: 2.0
 
+# ── Logging ───────────────────────────────────────────────────────────────────
 logging:
   save_logs: true
   level: INFO

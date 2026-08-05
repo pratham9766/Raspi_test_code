@@ -75,12 +75,10 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         
         bmp = raw.get('bmp388', {})
         bmp388 = BMP388Config(
-            interface=bmp.get('interface', 'spi'),
-            sck_gpio=bmp.get('sck_gpio', 11),
-            mosi_gpio=bmp.get('mosi_gpio', 10),
-            miso_gpio=bmp.get('miso_gpio', 9),
-            cs_gpio=bmp.get('cs_gpio', 22),
-            int_gpio=bmp.get('int_gpio', 17),
+            interface=bmp.get('interface', 'i2c'),
+            address=_addr(bmp.get('address', 0x76)),
+            sda_gpio=bmp.get('sda_gpio', 2),
+            scl_gpio=bmp.get('scl_gpio', 3),
             sea_level_pressure_hpa=bmp.get('sea_level_pressure_hpa', 1013.25),
             refresh_hz=bmp.get('refresh_hz', 5)
         )
@@ -106,7 +104,18 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         stepper = StepperConfig(**st)
         
         g = raw.get('gimbal', {})
-        gimbal = GimbalConfig(**g)
+        gimbal = GimbalConfig(
+            x_channel=g.get('x_channel', 0),
+            y_channel=g.get('y_channel', 1),
+            min_angle=g.get('min_angle', 0),
+            max_angle=g.get('max_angle', 180),
+            center_angle=g.get('center_angle', 90),
+            sweep_step_deg=g.get('sweep_step_deg', 5),
+            sweep_delay_s=g.get('sweep_delay_s', 0.05),
+            min_pulse_us=g.get('min_pulse_us', 500),
+            max_pulse_us=g.get('max_pulse_us', 2500),
+            settle_seconds=g.get('settle_seconds', 0.05),
+        )
         
         c = raw.get('camera', {})
         camera = CameraConfig(
