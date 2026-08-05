@@ -1,76 +1,60 @@
-"""Servo motor control using the pigpio daemon."""
-
+"""Servo motor control via PCA9685 PWM driver."""
 from __future__ import annotations
-
 import time
-from dataclasses import dataclass
-
-from config import ServoConfig
+from dataclasses import dataclass, field
+from hardware.pca9685_driver import PCA9685Driver
 from utils.helpers import HardwareError
 
+@dataclass(frozen=True)
+class ServoConfig:
+    pca9685_channel: int
+    min_pulse_us: int
+    max_pulse_us: int
+    min_angle: int
+    max_angle: int
+    settle_seconds: float
 
 @dataclass
 class ServoController:
-    """Control a PWM servo through pigpio."""
-
+    """Control a servo via PCA9685 channel."""
     config: ServoConfig
-
-    def __post_init__(self) -> None:
-        self._pi = None
+    driver: PCA9685Driver
 
     def connect(self) -> None:
-        """Connect to the local pigpio daemon."""
-        if self._pi is not None:
-            return
-        try:
-            import pigpio
-        except ImportError as exc:
-            raise HardwareError("pigpio Python package is not installed.") from exc
+        """Initialize PCA9685 driver."""
+        self.driver.connect()
 
-        self._pi = pigpio.pi()
-        if not self._pi.connected:
-            self._pi = None
-            raise HardwareError("pigpio daemon is not running. Start it with: sudo systemctl start pigpiod")
+    def angle_to_pulse_us(self, angle: float) -> float:
+        """Convert angle in degrees to PWM pulse in microseconds."""
+        clamped_angle = max(self.config.min_angle, min(self.config.max_angle, angle))
+        angle_range = self.config.max_angle - self.config.min_angle
+        pulse_range = self.config.max_pulse_us - self.config.min_pulse_us
+        return self.config.min_pulse_us + (clamped_angle - self.config.min_angle) * (pulse_range / angle_range)
 
-    def angle_to_pulse(self, angle: float) -> int:
-        """Convert an angle in degrees to a servo pulse width in microseconds."""
-        if not self.config.min_angle <= angle <= self.config.max_angle:
-            raise ValueError(
-                f"Angle must be between {self.config.min_angle} and {self.config.max_angle} degrees"
-            )
-        span = self.config.max_pulse - self.config.min_pulse
-        ratio = (angle - self.config.min_angle) / (self.config.max_angle - self.config.min_angle)
-        return int(self.config.min_pulse + ratio * span)
-
-    def move_to_angle(self, angle: float) -> None:
-        """Move the servo to a requested angle."""
-        self.connect()
-        pulse = self.angle_to_pulse(angle)
-        self._pi.set_servo_pulsewidth(self.config.gpio, pulse)
+    def move_to(self, angle: float) -> None:
+        """Move servo to specific angle."""
+        pulse = self.angle_to_pulse_us(angle)
+        self.driver.set_channel_pulse_us(self.config.pca9685_channel, pulse)
         time.sleep(self.config.settle_seconds)
 
-    def sweep(self, step: int = 15) -> None:
-        """Sweep from min angle to max angle and back."""
-        for angle in range(self.config.min_angle, self.config.max_angle + 1, step):
-            self.move_to_angle(angle)
-        for angle in range(self.config.max_angle, self.config.min_angle - 1, -step):
-            self.move_to_angle(angle)
+    def center(self) -> None:
+        """Move servo to center (90 degrees)."""
+        self.move_to((self.config.max_angle - self.config.min_angle) / 2)
 
-    def stop(self) -> None:
-        """Stop PWM output on the configured GPIO."""
-        self.connect()
-        self._pi.set_servo_pulsewidth(self.config.gpio, 0)
+    def sweep(self, step_deg: float = 10.0, delay: float = 0.05) -> None:
+        """Sweep servo from min to max and back."""
+        for angle in range(self.config.min_angle, self.config.max_angle + 1, int(step_deg)):
+            self.move_to(angle)
+            time.sleep(delay)
+        for angle in range(self.config.max_angle, self.config.min_angle - 1, -int(step_deg)):
+            self.move_to(angle)
+            time.sleep(delay)
 
+    def continuous_sweep(self, cycles: int = 3) -> None:
+        """Sweep servo continuously for N cycles."""
+        for _ in range(cycles):
+            self.sweep()
+            
     def close(self) -> None:
-        """Release the pigpio connection."""
-        if self._pi is not None:
-            self.stop()
-            self._pi.stop()
-            self._pi = None
-
-    def __enter__(self) -> "ServoController":
-        self.connect()
-        return self
-
-    def __exit__(self, exc_type, exc, traceback) -> None:
-        self.close()
+        """Disable PWM channel."""
+        self.driver.disable_channel(self.config.pca9685_channel)

@@ -1,9 +1,18 @@
-picamera2
-pigpio
-board
-busio
-adafruit-blinka
-adafruit-circuitpython-bno08x
-adafruit-circuitpython-bmp3xx
-PyYAML
-rich
+# Raspberry Pi 5 Hardware Test Utility
+# Install: pip install -r requirements.txt
+
+# Core Pi / Hardware Abstraction
+adafruit-blinka>=8.0.0
+RPi.GPIO>=0.7.1
+smbus2>=0.4.3
+
+# Sensors
+adafruit-circuitpython-bno08x>=1.0.0
+adafruit-circuitpython-bmp3xx>=2.0.0
+adafruit-circuitpython-pca9685>=2.0.0
+
+# Camera
+picamera2>=0.3.0
+
+# Config & Utilities
+PyYAML>=6.0

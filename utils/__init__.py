@@ -1,1 +1,1 @@
-"""Utility helpers for raspi_hardware_test."""
+"""Utilities for Raspberry Pi testing."""

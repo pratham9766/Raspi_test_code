@@ -1,29 +1,25 @@
-"""Entry point for the Raspberry Pi hardware test utility."""
-
-from __future__ import annotations
-
-from config import ConfigurationError, load_config
-from menu import run_menu
+"""Main entry point for Raspberry Pi 5 Hardware Test Utility."""
+import sys
+from config import load_config, ConfigurationError
 from utils.logger import build_logger
+from menu import run_menu
 
-
-def main() -> int:
-    """Load configuration, initialize logging, and start the menu."""
+def main():
     try:
         config = load_config()
-    except ConfigurationError as exc:
-        print(f"Configuration error: {exc}")
-        return 2
-
-    logger = build_logger(
-        save_logs=config.logging.save_logs,
-        log_dir=config.logging.directory,
-        level=config.logging.level,
-    )
-    logger.info("Loaded settings.yaml")
-    run_menu(config, logger)
-    return 0
-
+    except ConfigurationError as e:
+        print(f"\033[31mConfiguration Error:\033[0m {e}")
+        sys.exit(1)
+        
+    logger = build_logger(config)
+    try:
+        run_menu(logger, config)
+    except KeyboardInterrupt:
+        print("\n")
+        logger.info("Program interrupted by user.")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

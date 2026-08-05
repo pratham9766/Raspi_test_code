@@ -1,119 +1,94 @@
-"""Raspberry Pi Camera Module control using Picamera2."""
-
+"""Camera abstraction via Picamera2."""
 from __future__ import annotations
-
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+from utils.helpers import HardwareError, timestamp_slug, ensure_directory
 
-from config import CameraConfig
-from utils.helpers import HardwareError, ensure_directory, timestamp_slug
-
+@dataclass(frozen=True)
+class CameraConfig:
+    resolution: tuple[int, int]
+    preview_seconds: float
+    image_dir: Path
+    video_dir: Path
+    video_seconds: float
+    timelapse_interval_seconds: float
 
 @dataclass
-class CameraController:
-    """Capture images, preview, and record video with Picamera2."""
-
+class PiCameraSensor:
+    """Control the official Raspberry Pi Camera Module."""
     config: CameraConfig
-
-    def __post_init__(self) -> None:
-        self._camera = None
+    _picam2: Any = field(default=None, init=False, repr=False)
 
     def connect(self) -> None:
-        """Initialize Picamera2."""
-        if self._camera is not None:
+        """Initialize the camera."""
+        if self._picam2 is not None:
             return
         try:
             from picamera2 import Picamera2
+            self._picam2 = Picamera2()
         except ImportError as exc:
-            raise HardwareError("Picamera2 is not installed.") from exc
-
-        try:
-            camera = Picamera2()
-            still_config = camera.create_still_configuration(
-                main={"size": self.config.resolution}
-            )
-            camera.configure(still_config)
-            self._camera = camera
+            raise HardwareError("picamera2 not installed.") from exc
         except Exception as exc:
-            raise HardwareError(f"Camera initialization failed: {exc}") from exc
+            raise HardwareError(f"Failed to connect to camera: {exc}") from exc
+
+    def preview(self) -> None:
+        """Show camera preview."""
+        self.connect()
+        try:
+            self._picam2.start_preview(
+                preview={'main': {'size': self.config.resolution}}
+            )
+            time.sleep(self.config.preview_seconds)
+            self._picam2.stop_preview()
+        except Exception as exc:
+            raise HardwareError(f"Preview failed: {exc}") from exc
 
     def capture_image(self) -> Path:
-        """Capture a timestamped image and return its path."""
+        """Capture a single image and save it."""
         self.connect()
-        directory = ensure_directory(self.config.image_dir)
-        path = directory / f"image_{timestamp_slug()}.jpg"
-        self._camera.start()
+        ensure_directory(self.config.image_dir)
+        filepath = self.config.image_dir / f"img_{timestamp_slug()}.jpg"
         try:
-            self._camera.capture_file(str(path))
-        finally:
-            self._camera.stop()
-        return path
+            self._picam2.capture_file(str(filepath))
+            return filepath
+        except Exception as exc:
+            raise HardwareError(f"Image capture failed: {exc}") from exc
 
-    def preview(self, seconds: int | None = None) -> None:
-        """Start camera preview until Enter is pressed or a timeout expires."""
+    def capture_video(self) -> Path:
+        """Capture a video clip."""
         self.connect()
-        self._camera.start_preview()
-        self._camera.start()
+        ensure_directory(self.config.video_dir)
+        filepath = self.config.video_dir / f"vid_{timestamp_slug()}.h264"
         try:
-            if seconds is None:
-                input("Preview running. Press Enter to stop...")
-            else:
-                time.sleep(seconds)
-        finally:
-            self._camera.stop_preview()
-            self._camera.stop()
+            self._picam2.start_recording(str(filepath))
+            time.sleep(self.config.video_seconds)
+            self._picam2.stop_recording()
+            return filepath
+        except Exception as exc:
+            raise HardwareError(f"Video capture failed: {exc}") from exc
 
-
-    def record_video(self, seconds: int | None = None) -> Path:
-        """Record a timestamped video and return its path."""
+    def timelapse(self) -> None:
+        """Run a timelapse indefinitely until interrupted."""
         self.connect()
-        duration = seconds or self.config.video_seconds
-        directory = ensure_directory(self.config.video_dir)
-        path = directory / f"video_{timestamp_slug()}.h264"
-        video_config = self._camera.create_video_configuration(
-            main={"size": self.config.resolution}
-        )
-        self._camera.configure(video_config)
-        try:
-            from picamera2.encoders import H264Encoder
-            from picamera2.outputs import FileOutput
-        except ImportError as exc:
-            raise HardwareError("Picamera2 H264 encoder support is unavailable.") from exc
-
-        encoder = H264Encoder()
-        output = FileOutput(str(path))
-        self._camera.start_recording(encoder, output)
-        try:
-            time.sleep(duration)
-        finally:
-            self._camera.stop_recording()
-        return path
-
-
-    def continuous_capture(self) -> None:
-        """Capture images repeatedly until interrupted."""
-        self.connect()
-        print("Continuous capture running. Press CTRL+C to stop.")
+        ensure_directory(self.config.image_dir)
+        print(f"Started timelapse (1 image every {self.config.timelapse_interval_seconds}s). Press Ctrl+C to stop.")
         try:
             while True:
-                path = self.capture_image()
-                print(f"Saved {path}")
-                time.sleep(self.config.continuous_interval_seconds)
+                fp = self.capture_image()
+                print(f"Captured: {fp.name}")
+                time.sleep(self.config.timelapse_interval_seconds)
         except KeyboardInterrupt:
-            print("Continuous capture stopped.")
+            print("\nTimelapse stopped by user.")
+        except Exception as exc:
+            raise HardwareError(f"Timelapse failed: {exc}") from exc
 
     def close(self) -> None:
-        """Close the camera if Picamera2 exposes a close method."""
-        if self._camera is not None:
-            close = getattr(self._camera, "close", None)
-            if callable(close):
-                close()
-            self._camera = None
-
-    def __enter__(self) -> "CameraController":
-        self.connect()
-        return self
-
-    def __exit__(self, exc_type, exc, traceback) -> None:
-        self.close()
+        """Release camera resources."""
+        if self._picam2:
+            try:
+                self._picam2.stop()
+            except Exception:
+                pass
+            self._picam2 = None

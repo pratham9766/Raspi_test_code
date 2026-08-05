@@ -1,176 +1,132 @@
-"""Configuration loading for the Raspberry Pi hardware test toolkit."""
-
+"""Configuration loader — reads config.yaml and builds typed config objects."""
 from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
 import yaml
 
-
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_SETTINGS_PATH = BASE_DIR / "settings.yaml"
+DEFAULT_CONFIG_PATH = BASE_DIR / "config.yaml"
 
+class ConfigurationError(ValueError): ...
 
-class ConfigurationError(ValueError):
-    """Raised when settings.yaml is missing required values."""
-
-
-@dataclass(frozen=True)
-class BoardConfig:
-    pin_numbering: str
-    spi0_mosi_gpio: int
-    spi0_miso_gpio: int
-    spi0_sclk_gpio: int
-
-
-@dataclass(frozen=True)
-class CameraConfig:
-    resolution: tuple[int, int]
-    preview: bool
-    image_dir: Path
-    video_dir: Path
-    video_seconds: int
-    continuous_interval_seconds: float
-
-
-@dataclass(frozen=True)
-class ServoConfig:
-    gpio: int
-    min_pulse: int
-    max_pulse: int
-    min_angle: int
-    max_angle: int
-    settle_seconds: float
-
-
-@dataclass(frozen=True)
-class BNO085Config:
-    interface: str
-    sck_gpio: int
-    mosi_gpio: int
-    miso_gpio: int
-    cs_gpio: int
-    reset_gpio: int
-    int_gpio: int
-    refresh_hz: int
-
-
-@dataclass(frozen=True)
-class BMP388Config:
-    interface: str
-    address: int
-    sck_gpio: int
-    mosi_gpio: int
-    miso_gpio: int
-    cs_gpio: int
-    int_gpio: int
-    sea_level_pressure_hpa: float
-    refresh_hz: int
-
+from hardware.bno085 import BNO085Config
+from hardware.bmp388 import BMP388Config
+from hardware.pca9685_driver import PCA9685Config
+from hardware.servo import ServoConfig
+from hardware.stepper import StepperConfig
+from hardware.gimbal import GimbalConfig
+from hardware.camera import CameraConfig
 
 @dataclass(frozen=True)
 class LoggingConfig:
     save_logs: bool
     level: str
-    directory: Path
+    log_dir: Path
+    csv_enabled: bool
+    csv_filename: str
 
+@dataclass(frozen=True)
+class BoardConfig:
+    pin_numbering: str
+    i2c_bus: int
+    spi_bus: int
+    spi_device: int
 
 @dataclass(frozen=True)
 class AppConfig:
     board: BoardConfig
-    camera: CameraConfig
-    servo: ServoConfig
     bno085: BNO085Config
     bmp388: BMP388Config
+    pca9685: PCA9685Config
+    servo: ServoConfig
+    stepper: StepperConfig
+    gimbal: GimbalConfig
+    camera: CameraConfig
     logging: LoggingConfig
 
+def _path(v: str | Path, base: Path) -> Path:
+    p = Path(v)
+    return p if p.is_absolute() else base / p
 
-def _required(data: dict[str, Any], section: str, key: str) -> Any:
+def _addr(v: Any) -> int:
+    if isinstance(v, int): return v
+    return int(str(v), 0)
+
+def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
+    """Load and validate config.yaml, return typed AppConfig."""
+    cfg_path = Path(path)
+    if not cfg_path.exists():
+        raise ConfigurationError(f"config.yaml not found: {cfg_path}")
+    with cfg_path.open('r', encoding='utf-8') as f:
+        raw: dict[str, Any] = yaml.safe_load(f) or {}
+
     try:
-        return data[section][key]
-    except KeyError as exc:
-        raise ConfigurationError(f"Missing required setting: {section}.{key}") from exc
-
-
-def _project_path(value: str | Path) -> Path:
-    path = Path(value)
-    return path if path.is_absolute() else BASE_DIR / path
-
-
-def _parse_i2c_address(value: Any) -> int:
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        return int(value, 0)
-    raise ConfigurationError(f"Invalid I2C address value: {value!r}")
-
-
-def load_config(settings_path: str | Path = DEFAULT_SETTINGS_PATH) -> AppConfig:
-    """Load and validate the YAML settings file."""
-    path = Path(settings_path)
-    if not path.exists():
-        raise ConfigurationError(f"Settings file not found: {path}")
-
-    with path.open("r", encoding="utf-8") as handle:
-        raw: dict[str, Any] = yaml.safe_load(handle) or {}
-
-    resolution = _required(raw, "camera", "resolution")
-    if len(resolution) != 2:
-        raise ConfigurationError("camera.resolution must contain width and height")
-
-    return AppConfig(
-        board=BoardConfig(
-            pin_numbering=str(_required(raw, "board", "pin_numbering")),
-            spi0_mosi_gpio=int(_required(raw, "board", "spi0_mosi_gpio")),
-            spi0_miso_gpio=int(_required(raw, "board", "spi0_miso_gpio")),
-            spi0_sclk_gpio=int(_required(raw, "board", "spi0_sclk_gpio")),
-        ),
-        camera=CameraConfig(
-            resolution=(int(resolution[0]), int(resolution[1])),
-            preview=bool(_required(raw, "camera", "preview")),
-            image_dir=_project_path(_required(raw, "camera", "image_dir")),
-            video_dir=_project_path(_required(raw, "camera", "video_dir")),
-            video_seconds=int(_required(raw, "camera", "video_seconds")),
-            continuous_interval_seconds=float(
-                _required(raw, "camera", "continuous_interval_seconds")
-            ),
-        ),
-        servo=ServoConfig(
-            gpio=int(_required(raw, "servo", "gpio")),
-            min_pulse=int(_required(raw, "servo", "min_pulse")),
-            max_pulse=int(_required(raw, "servo", "max_pulse")),
-            min_angle=int(_required(raw, "servo", "min_angle")),
-            max_angle=int(_required(raw, "servo", "max_angle")),
-            settle_seconds=float(_required(raw, "servo", "settle_seconds")),
-        ),
-        bno085=BNO085Config(
-            interface=str(_required(raw, "bno085", "interface")).lower(),
-            sck_gpio=int(_required(raw, "bno085", "sck_gpio")),
-            mosi_gpio=int(_required(raw, "bno085", "mosi_gpio")),
-            miso_gpio=int(_required(raw, "bno085", "miso_gpio")),
-            cs_gpio=int(_required(raw, "bno085", "cs_gpio")),
-            reset_gpio=int(_required(raw, "bno085", "reset_gpio")),
-            int_gpio=int(_required(raw, "bno085", "int_gpio")),
-            refresh_hz=int(_required(raw, "bno085", "refresh_hz")),
-        ),
-        bmp388=BMP388Config(
-            interface=str(_required(raw, "bmp388", "interface")).lower(),
-            address=_parse_i2c_address(_required(raw, "bmp388", "address")),
-            sck_gpio=int(_required(raw, "bmp388", "sck_gpio")),
-            mosi_gpio=int(_required(raw, "bmp388", "mosi_gpio")),
-            miso_gpio=int(_required(raw, "bmp388", "miso_gpio")),
-            cs_gpio=int(_required(raw, "bmp388", "cs_gpio")),
-            int_gpio=int(_required(raw, "bmp388", "int_gpio")),
-            sea_level_pressure_hpa=float(
-                _required(raw, "bmp388", "sea_level_pressure_hpa")
-            ),
-            refresh_hz=int(_required(raw, "bmp388", "refresh_hz")),
-        ),
-        logging=LoggingConfig(
-            save_logs=bool(_required(raw, "logging", "save_logs")),
-            level=str(_required(raw, "logging", "level")).upper(),
-            directory=_project_path(_required(raw, "logging", "directory")),
-        ),
-    )
+        board = BoardConfig(**raw.get('board', {}))
+        
+        b = raw.get('bno085', {})
+        bno085 = BNO085Config(
+            interface=b.get('interface', 'i2c'),
+            address=_addr(b.get('address', 0x4A)),
+            sda_gpio=b.get('sda_gpio', 2),
+            scl_gpio=b.get('scl_gpio', 3),
+            refresh_hz=b.get('refresh_hz', 10)
+        )
+        
+        bmp = raw.get('bmp388', {})
+        bmp388 = BMP388Config(
+            interface=bmp.get('interface', 'spi'),
+            sck_gpio=bmp.get('sck_gpio', 11),
+            mosi_gpio=bmp.get('mosi_gpio', 10),
+            miso_gpio=bmp.get('miso_gpio', 9),
+            cs_gpio=bmp.get('cs_gpio', 22),
+            int_gpio=bmp.get('int_gpio', 17),
+            sea_level_pressure_hpa=bmp.get('sea_level_pressure_hpa', 1013.25),
+            refresh_hz=bmp.get('refresh_hz', 5)
+        )
+        
+        p = raw.get('pca9685', {})
+        pca9685 = PCA9685Config(
+            interface=p.get('interface', 'i2c'),
+            address=_addr(p.get('address', 0x40)),
+            frequency_hz=p.get('frequency_hz', 50)
+        )
+        
+        s = raw.get('servo', {})
+        servo = ServoConfig(
+            pca9685_channel=s.get('pca9685_channel', 0),
+            min_pulse_us=s.get('min_pulse_us', 500),
+            max_pulse_us=s.get('max_pulse_us', 2500),
+            min_angle=s.get('min_angle', 0),
+            max_angle=s.get('max_angle', 180),
+            settle_seconds=s.get('settle_seconds', 0.3)
+        )
+        
+        st = raw.get('stepper', {})
+        stepper = StepperConfig(**st)
+        
+        g = raw.get('gimbal', {})
+        gimbal = GimbalConfig(**g)
+        
+        c = raw.get('camera', {})
+        camera = CameraConfig(
+            resolution=tuple(c.get('resolution', [1920, 1080])),
+            preview_seconds=c.get('preview_seconds', 5),
+            image_dir=_path(c.get('image_dir', 'captures/images'), BASE_DIR),
+            video_dir=_path(c.get('video_dir', 'captures/videos'), BASE_DIR),
+            video_seconds=c.get('video_seconds', 10),
+            timelapse_interval_seconds=c.get('timelapse_interval_seconds', 2.0)
+        )
+        
+        l = raw.get('logging', {})
+        logging = LoggingConfig(
+            save_logs=l.get('save_logs', True),
+            level=l.get('level', 'INFO'),
+            log_dir=_path(l.get('log_dir', 'logs'), BASE_DIR),
+            csv_enabled=l.get('csv_enabled', True),
+            csv_filename=l.get('csv_filename', 'sensor_data.csv')
+        )
+        
+        return AppConfig(board, bno085, bmp388, pca9685, servo, stepper, gimbal, camera, logging)
+    except Exception as e:
+        raise ConfigurationError(f"Error parsing config.yaml: {e}")

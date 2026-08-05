@@ -1,67 +1,69 @@
-"""Bosch/Hillcrest BNO085 IMU interface using SPI."""
+"""Bosch/Hillcrest BNO085 IMU — I2C interface.
 
+Supports: Accelerometer, Gyroscope, Magnetometer,
+          Quaternion, Rotation Vector, Calibration Status.
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass
+import contextlib
+import io
+from dataclasses import dataclass, field
 from typing import Any
 
-from config import BNO085Config
 from utils.helpers import HardwareError
 
 
 @dataclass(frozen=True)
 class BNO085Reading:
+    """One complete sample from the BNO085 sensor."""
     acceleration: tuple[float, float, float] | None
     gyroscope: tuple[float, float, float] | None
     magnetometer: tuple[float, float, float] | None
     quaternion: tuple[float, float, float, float] | None
+    rotation_vector: tuple[float, float, float, float] | None
     calibration_status: int | None
+
+
+@dataclass(frozen=True)
+class BNO085Config:
+    """Configuration for BNO085."""
+    interface: str
+    address: int
+    sda_gpio: int
+    scl_gpio: int
+    refresh_hz: int
 
 
 @dataclass
 class BNO085Sensor:
-    """Read motion and orientation data from a BNO085 over SPI0."""
-
+    """Read motion data from a BNO085 over I2C."""
     config: BNO085Config
-
-    def __post_init__(self) -> None:
-        self._sensor: Any | None = None
+    _sensor: Any = field(default=None, init=False, repr=False)
 
     def connect(self) -> None:
-        """Initialize the BNO085 SPI sensor."""
+        """Initialize the BNO085 I2C sensor."""
         if self._sensor is not None:
             return
-        if self.config.interface != "spi":
-            raise HardwareError(f"Unsupported BNO085 interface: {self.config.interface}")
-
         try:
             import board
             import busio
-            import digitalio
             from adafruit_bno08x import (
                 BNO_REPORT_ACCELEROMETER,
                 BNO_REPORT_GYROSCOPE,
                 BNO_REPORT_MAGNETOMETER,
                 BNO_REPORT_ROTATION_VECTOR,
             )
-            from adafruit_bno08x.spi import BNO08X_SPI
+            from adafruit_bno08x.i2c import BNO08X_I2C
         except ImportError as exc:
             raise HardwareError(
-                "BNO085 SPI dependencies are not installed. Install "
-                "adafruit-circuitpython-bno08x."
+                "BNO085 I2C dependencies not installed. "
+                "Run: pip install adafruit-circuitpython-bno08x"
             ) from exc
 
-        import contextlib
-        import io
-
         try:
-            spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-            chip_select = digitalio.DigitalInOut(getattr(board, f"D{self.config.cs_gpio}"))
-            interrupt   = digitalio.DigitalInOut(getattr(board, f"D{self.config.int_gpio}"))
-            reset       = digitalio.DigitalInOut(getattr(board, f"D{self.config.reset_gpio}"))
-            # Suppress the BNO08X library's own debug prints (Hard resetting, raw packets)
+            i2c = busio.I2C(board.SCL, board.SDA)
             with contextlib.redirect_stdout(io.StringIO()):
-                sensor = BNO08X_SPI(spi, chip_select, interrupt, reset)
+                sensor = BNO08X_I2C(i2c, address=self.config.address)
                 sensor.enable_feature(BNO_REPORT_ACCELEROMETER)
                 sensor.enable_feature(BNO_REPORT_GYROSCOPE)
                 sensor.enable_feature(BNO_REPORT_MAGNETOMETER)
@@ -69,8 +71,7 @@ class BNO085Sensor:
             self._sensor = sensor
         except Exception as exc:
             raise HardwareError(
-                "BNO085 not detected on SPI "
-                f"(CS GPIO{self.config.cs_gpio}, RST GPIO{self.config.reset_gpio}): {exc}"
+                f"BNO085 not detected on I2C address 0x{self.config.address:02X}: {exc}"
             ) from exc
 
     def read(self) -> BNO085Reading:
@@ -82,11 +83,12 @@ class BNO085Sensor:
                 gyroscope=self._sensor.gyro,
                 magnetometer=self._sensor.magnetic,
                 quaternion=self._sensor.quaternion,
-                calibration_status=getattr(self._sensor, "calibration_status", None),
+                rotation_vector=getattr(self._sensor, 'rotation_vector', None),
+                calibration_status=getattr(self._sensor, 'calibration_status', None),
             )
         except Exception as exc:
             raise HardwareError(f"Failed to read BNO085: {exc}") from exc
 
     def close(self) -> None:
-        """Release references held by the sensor object."""
+        """Release sensor reference."""
         self._sensor = None

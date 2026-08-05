@@ -1,0 +1,69 @@
+# Raspberry Pi 5 Hardware Test Utility — Configuration
+# Edit this file to match your wiring.
+
+board:
+  pin_numbering: BCM
+  i2c_bus: 1
+  spi_bus: 0
+  spi_device: 0
+
+bno085:
+  interface: i2c
+  address: 0x4A        # 0x4A default; 0x4B if PS1 pulled high
+  sda_gpio: 2
+  scl_gpio: 3
+  refresh_hz: 10
+
+bmp388:
+  interface: spi
+  sck_gpio: 11
+  mosi_gpio: 10
+  miso_gpio: 9
+  cs_gpio: 22
+  int_gpio: 17
+  sea_level_pressure_hpa: 1013.25
+  refresh_hz: 5
+
+pca9685:
+  interface: i2c
+  address: 0x40
+  frequency_hz: 50
+
+servo:
+  pca9685_channel: 0
+  min_pulse_us: 500
+  max_pulse_us: 2500
+  min_angle: 0
+  max_angle: 180
+  settle_seconds: 0.3
+
+stepper:
+  in1_gpio: 18
+  in2_gpio: 23
+  in3_gpio: 24
+  in4_gpio: 25
+  step_delay_ms: 2
+  steps_per_revolution: 4096
+
+gimbal:
+  x_steps_per_degree: 11.37    # 4096 / 360
+  y_min_angle: 0
+  y_max_angle: 180
+  y_center_angle: 90
+  sweep_step_deg: 5
+  sweep_delay_s: 0.05
+
+camera:
+  resolution: [1920, 1080]
+  preview_seconds: 5
+  image_dir: captures/images
+  video_dir: captures/videos
+  video_seconds: 10
+  timelapse_interval_seconds: 2.0
+
+logging:
+  save_logs: true
+  level: INFO
+  log_dir: logs
+  csv_enabled: true
+  csv_filename: sensor_data.csv

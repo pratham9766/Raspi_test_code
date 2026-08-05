@@ -1,84 +1,73 @@
-"""Bosch BMP388 pressure sensor interface."""
+"""Bosch BMP388 barometric pressure and temperature sensor — SPI interface."""
 
 from __future__ import annotations
-
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
-
-from config import BMP388Config
 from utils.helpers import HardwareError
 
+@dataclass(frozen=True)
+class BMP388Config:
+    """Configuration for BMP388."""
+    interface: str
+    sck_gpio: int
+    mosi_gpio: int
+    miso_gpio: int
+    cs_gpio: int
+    int_gpio: int
+    sea_level_pressure_hpa: float
+    refresh_hz: int
 
 @dataclass(frozen=True)
 class BMP388Reading:
+    """One pressure sensor sample."""
     temperature_c: float
     pressure_hpa: float
     altitude_m: float
 
-
 @dataclass
 class BMP388Sensor:
-    """Read temperature, pressure, and altitude from a BMP388 over SPI or I2C."""
-
+    """Read temperature, pressure, altitude from BMP388 over SPI."""
     config: BMP388Config
-
-    def __post_init__(self) -> None:
-        self._sensor: Any | None = None
+    _sensor: Any = field(default=None, init=False, repr=False)
 
     def connect(self) -> None:
-        """Initialize the BMP388 sensor."""
+        """Initialize the BMP388 SPI sensor."""
         if self._sensor is not None:
             return
         try:
             import board
             import busio
-            import adafruit_bmp3xx
+            import digitalio
+            from adafruit_bmp3xx import BMP3XX_SPI
         except ImportError as exc:
-            raise HardwareError("BMP388 dependencies are not installed.") from exc
-
-        try:
-            if self.config.interface == "i2c":
-                sensor = self._connect_i2c(board, busio, adafruit_bmp3xx)
-            elif self.config.interface == "spi":
-                sensor = self._connect_spi(board, busio, adafruit_bmp3xx)
-            else:
-                raise HardwareError(
-                    f"Unsupported BMP388 interface: {self.config.interface}"
-                )
-            sensor.sea_level_pressure = self.config.sea_level_pressure_hpa
-            self._sensor = sensor
-        except Exception as exc:
             raise HardwareError(
-                f"BMP388 not detected on {self.config.interface.upper()}: {exc}"
+                "BMP388 dependencies missing. Run: pip install adafruit-circuitpython-bmp3xx"
             ) from exc
 
-    def _connect_i2c(self, board, busio, adafruit_bmp3xx):
-        i2c = busio.I2C(board.SCL, board.SDA)
-        return adafruit_bmp3xx.BMP3XX_I2C(i2c, address=self.config.address)
-
-    def _connect_spi(self, board, busio, adafruit_bmp3xx):
         try:
-            import digitalio
-        except ImportError as exc:
-            raise HardwareError("digitalio is required for BMP388 SPI mode.") from exc
-
-        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-        chip_select_pin = getattr(board, f"D{self.config.cs_gpio}")
-        chip_select = digitalio.DigitalInOut(chip_select_pin)
-        return adafruit_bmp3xx.BMP3XX_SPI(spi, chip_select)
+            cs = digitalio.DigitalInOut(getattr(board, f"D{self.config.cs_gpio}"))
+            spi = busio.SPI(
+                getattr(board, f"D{self.config.sck_gpio}"),
+                getattr(board, f"D{self.config.mosi_gpio}"),
+                getattr(board, f"D{self.config.miso_gpio}")
+            )
+            self._sensor = BMP3XX_SPI(spi, cs)
+            self._sensor.sea_level_pressure = self.config.sea_level_pressure_hpa
+        except Exception as exc:
+            raise HardwareError(f"Failed to connect to BMP388 via SPI: {exc}") from exc
 
     def read(self) -> BMP388Reading:
-        """Return one BMP388 pressure sensor sample."""
+        """Read a sample from the BMP388."""
         self.connect()
         try:
             return BMP388Reading(
-                temperature_c=float(self._sensor.temperature),
-                pressure_hpa=float(self._sensor.pressure),
-                altitude_m=float(self._sensor.altitude),
+                temperature_c=self._sensor.temperature,
+                pressure_hpa=self._sensor.pressure,
+                altitude_m=self._sensor.altitude
             )
         except Exception as exc:
             raise HardwareError(f"Failed to read BMP388: {exc}") from exc
 
     def close(self) -> None:
-        """Release references held by the sensor object."""
+        """Release the SPI sensor."""
         self._sensor = None

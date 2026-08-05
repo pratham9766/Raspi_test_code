@@ -1,57 +1,43 @@
-"""Interactive Raspberry Pi camera tests."""
+"""Test Camera."""
+from hardware.camera import PiCameraSensor
 
-from __future__ import annotations
-
-from config import AppConfig
-from hardware.camera import CameraController
-from utils.helpers import HardwareError
-from utils.logger import ToolkitLogger
-
-
-def run(logger: ToolkitLogger, config: AppConfig) -> bool:
-    """Run the camera test menu."""
-    camera = CameraController(config.camera)
-    while True:
-        print("\nCamera Test")
-        print("1 Capture Image")
-        print("2 Preview Camera")
-        print("3 Record 10 sec Video")
-        print("4 Continuous Capture")
-        print("0 Back")
-        choice = input("Select: ").strip()
-
-        try:
-            if choice == "1":
-                path = camera.capture_image()
-                logger.success(f"Image saved: {path}")
-            elif choice == "2":
-                camera.preview()
-                logger.success("Preview completed")
-            elif choice == "3":
-                path = camera.record_video(config.camera.video_seconds)
-                logger.success(f"Video saved: {path}")
-            elif choice == "4":
-                camera.continuous_capture()
-            elif choice == "0":
-                return True
-            else:
-                logger.warning("Invalid camera menu option")
-        except HardwareError as exc:
-            logger.error(str(exc))
-            return False
-        finally:
-            camera.close()
-
-
-def quick_check(logger: ToolkitLogger, config: AppConfig) -> bool:
-    """Detect whether the camera can be initialized."""
-    camera = CameraController(config.camera)
+def quick_check(logger, config) -> bool:
     try:
-        camera.connect()
-        logger.success("Camera detected")
+        cam = PiCameraSensor(config=config.camera)
+        cam.connect()
+        cam.close()
+        logger.success("Camera detected and initialized.")
         return True
-    except HardwareError as exc:
-        logger.error(f"Camera not detected: {exc}")
+    except Exception as e:
+        logger.error(str(e))
         return False
+
+def run(logger, config):
+    cam = PiCameraSensor(config=config.camera)
+    try:
+        while True:
+            print("\n\033[1;36m=== Camera Menu ===\033[0m")
+            print("1 Camera Preview")
+            print("2 Capture Image")
+            print("3 Capture Video")
+            print("4 Timelapse (Ctrl+C to stop)")
+            print("0 Back")
+            choice = input("Select option: ").strip()
+            
+            if choice == '1':
+                logger.info(f"Showing preview for {config.camera.preview_seconds}s...")
+                cam.preview()
+            elif choice == '2':
+                fp = cam.capture_image()
+                logger.success(f"Image saved to {fp}")
+            elif choice == '3':
+                fp = cam.capture_video()
+                logger.success(f"Video saved to {fp}")
+            elif choice == '4':
+                cam.timelapse()
+            elif choice == '0': break
+            else: logger.warning("Invalid choice.")
+    except Exception as e:
+        logger.error(f"Camera error: {e}")
     finally:
-        camera.close()
+        cam.close()
