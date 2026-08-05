@@ -87,7 +87,8 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         pca9685 = PCA9685Config(
             interface=p.get('interface', 'i2c'),
             address=_addr(p.get('address', 0x40)),
-            frequency_hz=p.get('frequency_hz', 50)
+            frequency_hz=p.get('frequency_hz', 50),
+            oe_gpio=p.get('oe_gpio', None),
         )
         
         s = raw.get('servo', {})

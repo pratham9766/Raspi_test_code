@@ -29,6 +29,7 @@ pca9685:
   interface: i2c
   address: 0x40
   frequency_hz: 50
+  oe_gpio: 4              # Output Enable pin (active LOW). GPIO4 → driven LOW to enable outputs.
 
 # ── Standalone Servo (channel 0, for test_servo menu) ────────────────────────
 servo:

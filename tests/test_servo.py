@@ -4,7 +4,7 @@ from hardware.pca9685_driver import PCA9685Driver
 from hardware.servo import ServoController
 
 def get_servo(config):
-    drv = PCA9685Driver(address=config.pca9685.address, frequency_hz=config.pca9685.frequency_hz)
+    drv = PCA9685Driver(address=config.pca9685.address, frequency_hz=config.pca9685.frequency_hz, oe_gpio=config.pca9685.oe_gpio)
     return ServoController(config=config.servo, driver=drv)
 
 def quick_check(logger, config) -> bool:

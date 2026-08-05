@@ -22,6 +22,7 @@ def _make_gimbal(config: AppConfig) -> Gimbal:
     driver = PCA9685Driver(
         address=config.pca9685.address,
         frequency_hz=config.pca9685.frequency_hz,
+        oe_gpio=config.pca9685.oe_gpio,
     )
     return Gimbal(driver=driver, config=config.gimbal)
 
