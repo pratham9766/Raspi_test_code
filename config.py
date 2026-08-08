@@ -15,7 +15,14 @@ from hardware.bmp388 import BMP388Config
 from hardware.pca9685_driver import PCA9685Config
 from hardware.servo import ServoConfig
 from hardware.stepper import StepperConfig
-from hardware.gimbal import GimbalConfig
+from hardware.gimbal import (
+    GimbalConfig,
+    GimbalServoConfig,
+    GimbalOEConfig,
+    GimbalStepperConfig,
+    GimbalBNO085Config,
+    GimbalSafetyConfig,
+)
 from hardware.camera import CameraConfig
 
 @dataclass(frozen=True)
@@ -104,18 +111,54 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
         st = raw.get('stepper', {})
         stepper = StepperConfig(**st)
         
-        g = raw.get('gimbal', {})
+        g   = raw.get('gimbal', {})
+        gs  = g.get('servo', {})
+        god = g.get('servo_driver', {})
+        gst = g.get('stepper', {})
+        gb  = g.get('bno085', {})
+        gsa = g.get('safety', {})
+
         gimbal = GimbalConfig(
-            x_channel=g.get('x_channel', 0),
-            y_channel=g.get('y_channel', 1),
-            min_angle=g.get('min_angle', 0),
-            max_angle=g.get('max_angle', 180),
-            center_angle=g.get('center_angle', 90),
-            sweep_step_deg=g.get('sweep_step_deg', 5),
-            sweep_delay_s=g.get('sweep_delay_s', 0.05),
-            min_pulse_us=g.get('min_pulse_us', 500),
-            max_pulse_us=g.get('max_pulse_us', 2500),
-            settle_seconds=g.get('settle_seconds', 0.05),
+            servo=GimbalServoConfig(
+                channel=int(gs.get('channel', 0)),
+                center_angle=float(gs.get('center_angle', 90)),
+                min_angle=float(gs.get('min_angle', 30)),
+                max_angle=float(gs.get('max_angle', 150)),
+                step_angle=float(gs.get('step_angle', 5)),
+                min_pulse_us=int(gs.get('min_pulse_us', 500)),
+                max_pulse_us=int(gs.get('max_pulse_us', 2500)),
+                settle_s=float(gs.get('settle_s', 0.3)),
+            ),
+            servo_driver=GimbalOEConfig(
+                oe_gpio=int(god.get('oe_gpio', 4)),
+                active_low=bool(god.get('active_low', True)),
+            ),
+            stepper=GimbalStepperConfig(
+                motor=gst.get('motor', '28BYJ-48'),
+                driver_ic=gst.get('driver_ic', 'ULN2003'),
+                in1_gpio=int(gst.get('in1_gpio', 18)),
+                in2_gpio=int(gst.get('in2_gpio', 23)),
+                in3_gpio=int(gst.get('in3_gpio', 24)),
+                in4_gpio=int(gst.get('in4_gpio', 25)),
+                sequence=gst.get('sequence', 'half_step'),
+                step_delay_ms=float(gst.get('step_delay_ms', 4)),
+                direction_inverted=bool(gst.get('direction_inverted', False)),
+                max_relative_steps=int(gst.get('max_relative_steps', 2000)),
+            ),
+            bno085=GimbalBNO085Config(
+                enabled=bool(gb.get('enabled', True)),
+                feedback_enabled=bool(gb.get('feedback_enabled', False)),
+                refresh_hz=int(gb.get('refresh_hz', 10)),
+                bno_roll_to_x=bool(gb.get('bno_roll_to_x', False)),
+                bno_pitch_to_y=bool(gb.get('bno_pitch_to_y', True)),
+                kp_y=float(gb.get('kp_y', 0.3)),
+                deadband_deg=float(gb.get('deadband_deg', 2.0)),
+                max_servo_correction_deg=float(gb.get('max_servo_correction_deg', 10.0)),
+            ),
+            safety=GimbalSafetyConfig(
+                require_confirmation=bool(gsa.get('require_confirmation', True)),
+                disable_outputs_on_exit=bool(gsa.get('disable_outputs_on_exit', True)),
+            ),
         )
         
         c = raw.get('camera', {})

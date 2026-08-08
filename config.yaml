@@ -49,22 +49,51 @@ stepper:
   step_delay_ms: 2
   steps_per_revolution: 4096
 
-# ── Gimbal (dual servo via PCA9685) ──────────────────────────────────────────
-# X axis (yaw)   → PCA9685 channel 0
-# Y axis (pitch) → PCA9685 channel 1
-# BNO085 Roll  → X servo
-# BNO085 Pitch → Y servo
+# ── Gimbal (stepper X-axis + servo Y-axis) ───────────────────────────────────
+# X axis (yaw / pan)   : 28BYJ-48 stepper via ULN2003 (GPIO 18,23,24,25)
+# Y axis (pitch / tilt): Servo on PCA9685 channel 0
+# OE                   : GPIO4 (active-LOW — drive LOW to enable servo output)
 gimbal:
-  x_channel: 0
-  y_channel: 1
-  min_angle: 0
-  max_angle: 180
-  center_angle: 90
-  sweep_step_deg: 5
-  sweep_delay_s: 0.05
-  min_pulse_us: 500
-  max_pulse_us: 2500
-  settle_seconds: 0.05
+
+  servo:
+    channel: 0              # PCA9685 channel for Y axis
+    center_angle: 90        # Default safe-center position (degrees)
+    min_angle: 30           # Soft lower limit
+    max_angle: 150          # Soft upper limit
+    step_angle: 5           # Degrees per keyboard step command
+    min_pulse_us: 500       # PWM minimum pulse width (µs)
+    max_pulse_us: 2500      # PWM maximum pulse width (µs)
+    settle_s: 0.3           # Settle time after each move (seconds)
+
+  servo_driver:
+    oe_gpio: 4              # GPIO4 → Output Enable line
+    active_low: true        # true = GPIO LOW enables outputs (most boards)
+
+  stepper:
+    motor: "28BYJ-48"
+    driver_ic: "ULN2003"
+    in1_gpio: 18
+    in2_gpio: 23
+    in3_gpio: 24
+    in4_gpio: 25
+    sequence: "half_step"   # half_step (default) or full_step
+    step_delay_ms: 4        # Delay between steps — do not set below 2 ms
+    direction_inverted: false
+    max_relative_steps: 2000  # Hard limit |relative_x_steps|
+
+  bno085:
+    enabled: true
+    feedback_enabled: false   # Set true only after verifying axis mapping
+    refresh_hz: 10
+    bno_roll_to_x: false      # DISABLED — axis mapping unverified
+    bno_pitch_to_y: true      # Pitch → Y servo correction
+    kp_y: 0.3                 # Proportional gain (conservative)
+    deadband_deg: 2.0         # Ignore errors < this (degrees)
+    max_servo_correction_deg: 10.0  # Cap per-loop correction
+
+  safety:
+    require_confirmation: true   # Prompt before any movement starts
+    disable_outputs_on_exit: true  # Always disable OE on exit
 
 # ── Camera ────────────────────────────────────────────────────────────────────
 camera:
